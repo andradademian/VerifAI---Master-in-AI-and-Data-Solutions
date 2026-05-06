@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+App/.venv/
+
+# Node
+node_modules/
+package-lock.json
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Pipeline outputs
+results_*.csv
+*.log
+
+# Model artifacts (large binaries)
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+*.npy
+
+# Hugging Face / Transformers cache
+.cache/
+.huggingface/
+
+# Large model directories
+distilbert_finetuned/
+distilbert_finetuned-*/
+FakeNewsModel/checkpoints/
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+*.key
+credentials.json
+
+# Jupyter
+.ipynb_checkpoints/

@@ -43,7 +43,7 @@ print(f"\nLoading model from '{MODEL_DIR}' ...")
 tokenizer = DistilBertTokenizerFast.from_pretrained(MODEL_DIR)
 model = DistilBertForSequenceClassification.from_pretrained(MODEL_DIR).to(device)
 model.eval()
-print("✅ Model loaded")
+print("Model loaded")
 
 # ---------------------------------------------------------------------------
 # 3. Load data (API OR dataset)
@@ -81,8 +81,18 @@ else:
 # ---------------------------------------------------------------------------
 # 4. Risk system
 # ---------------------------------------------------------------------------
+FAKE_THRESHOLD = 0.70
+UNCERTAIN_LOW = 0.40
+
 def compute_risk_score(fake_prob):
-    return round(min(max(fake_prob * 0.5, fake_prob * 0.3), 1.0), 3)
+    return round(min(max(fake_prob, 0.0), 1.0), 3)
+
+def classify_with_threshold(fake_prob):
+    if fake_prob >= FAKE_THRESHOLD:
+        return 1, "fake"
+    if fake_prob >= UNCERTAIN_LOW:
+        return -1, "uncertain"
+    return 0, "real"
 
 # ---------------------------------------------------------------------------
 # 5. Dataset class
@@ -140,16 +150,18 @@ rows = []
 for i in range(len(X_test)):
     fake_prob = float(probs[i][0])
     real_prob = float(probs[i][1])
-    pred_label = int(np.argmax(probs[i]))
+    argmax_label = int(np.argmax(probs[i]))
+    pred_label, pred_name = classify_with_threshold(fake_prob)
 
     true_label = None if args.use_api else int(y_test[i])
 
     rows.append({
         "text_snippet": X_test[i][:120],
         "pred_label": pred_label,
-        "pred_label_name": "fake" if pred_label == 1 else "real",
+        "pred_label_name": pred_name,
+        "argmax_label": argmax_label,
         "true_label": true_label,
-        "correct": (pred_label == true_label) if true_label is not None else None,
+        "correct": (argmax_label == true_label) if true_label is not None else None,
         "fake_probability": round(fake_prob, 4),
         "real_probability": round(real_prob, 4),
         "risk_score": compute_risk_score(fake_prob),
@@ -162,6 +174,15 @@ for i in range(len(X_test)):
     })
 
 results_df = pd.DataFrame(rows)
+
+# Drop duplicates by title/url (NewsData often returns the same article multiple times)
+before = len(results_df)
+if "url" in results_df.columns and results_df["url"].notna().any():
+    results_df = results_df.drop_duplicates(subset=["url"], keep="first")
+results_df = results_df.drop_duplicates(subset=["title"], keep="first").reset_index(drop=True)
+dupes_removed = before - len(results_df)
+if dupes_removed:
+    print(f"Removed {dupes_removed} duplicate articles")
 
 # ---------------------------------------------------------------------------
 # 8. Summary
@@ -178,8 +199,58 @@ if not args.use_api:
 else:
     print("Accuracy: N/A (live data)")
 
-print(f"Predicted fake: {(results_df['pred_label']==1).sum()}")
-print(f"Predicted real: {(results_df['pred_label']==0).sum()}")
+print(f"Predicted fake     (>= {FAKE_THRESHOLD:.2f}): {(results_df['pred_label']==1).sum()}")
+print(f"Uncertain ({UNCERTAIN_LOW:.2f}-{FAKE_THRESHOLD:.2f}):       {(results_df['pred_label']==-1).sum()}")
+print(f"Predicted real     (< {UNCERTAIN_LOW:.2f}): {(results_df['pred_label']==0).sum()}")
+
+# ---------------------------------------------------------------------------
+# 8b. Risk report
+# ---------------------------------------------------------------------------
+def generate_risk_report(results_df: pd.DataFrame) -> None:
+    scores = results_df["risk_score"]
+    n = len(scores)
+
+    tiers = [
+        ("Low",      scores < 0.4),
+        ("Medium",   (scores >= 0.4) & (scores < 0.6)),
+        ("High",     (scores >= 0.6) & (scores < 0.8)),
+        ("Critical", scores >= 0.8),
+    ]
+
+    sep = "=" * 60
+
+    print(f"\n{sep}")
+    print("RISK REPORT")
+    print(sep)
+    print(
+        "NOTE: Ground-truth labels are unavailable in live environments.\n"
+        "Evaluation is based on confidence scores, risk levels, and\n"
+        "detection patterns rather than traditional accuracy metrics."
+    )
+
+    print(f"\n{'- Risk Distribution ':-<60}")
+    print(f"  {'Tier':<10} {'Count':>6}  {'Pct':>6}")
+    print(f"  {'-'*10} {'-'*6}  {'-'*6}")
+    for label, mask in tiers:
+        count = int(mask.sum())
+        pct = count / n * 100
+        print(f"  {label:<10} {count:>6}  {pct:>5.1f}%")
+
+    print(f"\n{'- Confidence Score Distribution ':-<60}")
+    print(f"  Mean  : {scores.mean():.4f}")
+    print(f"  Median: {scores.median():.4f}")
+    print(f"  Std   : {scores.std():.4f}")
+
+    print(f"\n{'- Top 10 Flagged Articles (by risk score) ':-<60}")
+    top = results_df.nlargest(10, "risk_score")[["title", "risk_score"]].reset_index(drop=True)
+    for rank, row in top.iterrows():
+        title = str(row["title"])[:80] if row["title"] else "(no title)"
+        title = title.encode("ascii", errors="replace").decode("ascii")
+        print(f"  {rank+1:>2}. [{row['risk_score']:.3f}]  {title}")
+
+    print(sep)
+
+generate_risk_report(results_df)
 
 # ---------------------------------------------------------------------------
 # 9. Save
