@@ -1,24 +1,17 @@
-#run with py pipeline_full.py --use_api
+# Run with:
+# python pipeline_full_api_default.py
 
 # ---------------------------------------------------------------------------
-# 0. Argument parsing
+# 0. Configuration
 # ---------------------------------------------------------------------------
-import argparse, os, warnings, time
+import os, warnings, time
 warnings.filterwarnings("ignore")
 
-parser = argparse.ArgumentParser(description="Fake-news detection pipeline")
-parser.add_argument("--model_dir", default="distilbert_finetuned")
-parser.add_argument("--max_articles", type=int, default=200)
-parser.add_argument("--batch_size", type=int, default=16)
-parser.add_argument("--output_csv", default="")
-parser.add_argument("--use_api", action="store_true",
-                    help="Use live news API instead of dataset")
-args = parser.parse_args()
-
-MODEL_DIR    = args.model_dir
-MAX_ARTICLES = args.max_articles
-BATCH_SIZE   = args.batch_size
+MODEL_DIR    = "DistilBERT"
+MAX_ARTICLES = 200
+BATCH_SIZE   = 16
 MAX_LEN      = 256
+OUTPUT_CSV   = ""
 
 # ---------------------------------------------------------------------------
 # 1. Imports
@@ -46,37 +39,24 @@ model.eval()
 print("Model loaded")
 
 # ---------------------------------------------------------------------------
-# 3. Load data (API OR dataset)
+# 3. Load data from API
 # ---------------------------------------------------------------------------
 articles = None
 
-if args.use_api:
-    print("\n[DATA] Using LIVE API")
+print("\n[DATA] Using LIVE API")
 
-    fetcher = NewsDataFetcher(Config.NEWSDATA_API_KEY)
+fetcher = NewsDataFetcher(Config.NEWSDATA_API_KEY)
 
-    articles = fetcher.fetch_articles(
-        country=Config.DEFAULT_COUNTRY,
-        language=Config.DEFAULT_LANGUAGE,
-        max_results=Config.DEFAULT_MAX_ARTICLES
-    )
+articles = fetcher.fetch_articles(
+    country=Config.DEFAULT_COUNTRY,
+    language=Config.DEFAULT_LANGUAGE,
+    max_results=Config.DEFAULT_MAX_ARTICLES
+)
 
-    X_test = [(a["title"] + " " + a["content"]).strip() for a in articles]
-    y_test = [None] * len(X_test)
+X_test = [(a["title"] + " " + a["content"]).strip() for a in articles]
+y_test = [None] * len(X_test)
 
-    print(f"Fetched {len(X_test)} articles")
-
-else:
-    print("\n[DATA] Using LOCAL dataset")
-
-    X_test = np.load(os.path.join(MODEL_DIR, "test_texts.npy"), allow_pickle=True)
-    y_test = np.load(os.path.join(MODEL_DIR, "test_labels.npy"), allow_pickle=True)
-
-    if MAX_ARTICLES and MAX_ARTICLES < len(X_test):
-        X_test = X_test[:MAX_ARTICLES]
-        y_test = y_test[:MAX_ARTICLES]
-
-    print(f"Loaded {len(X_test)} test articles")
+print(f"Fetched {len(X_test)} articles")
 
 # ---------------------------------------------------------------------------
 # 4. Risk system
@@ -153,7 +133,7 @@ for i in range(len(X_test)):
     argmax_label = int(np.argmax(probs[i]))
     pred_label, pred_name = classify_with_threshold(fake_prob)
 
-    true_label = None if args.use_api else int(y_test[i])
+    true_label = None
 
     rows.append({
         "text_snippet": X_test[i][:120],
@@ -193,11 +173,7 @@ print("="*60)
 
 print(f"Articles processed: {len(results_df)}")
 
-if not args.use_api:
-    accuracy = results_df["correct"].mean()
-    print(f"Accuracy: {accuracy:.4f}")
-else:
-    print("Accuracy: N/A (live data)")
+print("Accuracy: N/A (live data)")
 
 print(f"Predicted fake     (>= {FAKE_THRESHOLD:.2f}): {(results_df['pred_label']==1).sum()}")
 print(f"Uncertain ({UNCERTAIN_LOW:.2f}-{FAKE_THRESHOLD:.2f}):       {(results_df['pred_label']==-1).sum()}")
@@ -257,8 +233,8 @@ generate_risk_report(results_df)
 # ---------------------------------------------------------------------------
 print("\n[3/3] Saving results...")
 
-if args.output_csv:
-    out_path = args.output_csv
+if OUTPUT_CSV:
+    out_path = OUTPUT_CSV
 else:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_path = f"results_{ts}.csv"
