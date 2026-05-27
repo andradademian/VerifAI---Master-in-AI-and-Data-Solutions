@@ -31,7 +31,7 @@ NEWSDATA_API_URL = os.getenv(
 # LOAD AI MODEL
 # -------------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_DIR = os.path.join(BASE_DIR, "distilbert_finetuned")
+MODEL_DIR = os.path.join(BASE_DIR, "distilbert_frozen_hf")
 MAX_LEN = 256
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
