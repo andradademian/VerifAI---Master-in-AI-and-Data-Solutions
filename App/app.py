@@ -185,13 +185,11 @@ def get_article(article_id):
         'message': 'Article not found'
     }), 404
 
-
 # -------------------------------------------------------------------
 # AI ANALYSIS ENDPOINT
 # -------------------------------------------------------------------
 @app.route('/api/analyze', methods=['POST'])
 def analyze_article():
-
     try:
         data = request.get_json()
 
@@ -206,9 +204,20 @@ def analyze_article():
             }), 400
 
         # ---------------------------------------------------------
-        # PREPARE ARTICLE
+        # OPTIONAL TEXT NORMALISATION (reduces domain bias)
         # ---------------------------------------------------------
-        content = f"{title} {text}"
+        def clean_text(t):
+            import re
+            return re.sub(
+                r"\b(NBA|NFL|FIFA|election|senate|government|president)\b",
+                "",
+                t,
+                flags=re.I
+            )
+
+        # Better structure than raw concatenation
+        content = f"Title: {title}. Article: {text[:2000]}"
+        content = clean_text(content)
 
         # ---------------------------------------------------------
         # TOKENIZE
@@ -225,64 +234,77 @@ def analyze_article():
         attention_mask = inputs["attention_mask"].to(device)
 
         # ---------------------------------------------------------
-        # MODEL INFERENCE
+        # MODEL INFERENCE (TEMPERATURE SCALING)
         # ---------------------------------------------------------
-        with torch.no_grad():
+        import torch.nn.functional as F
 
+        TEMPERATURE = 2.0  # key fix for overconfidence
+
+        with torch.no_grad():
             outputs = model(
                 input_ids=input_ids,
                 attention_mask=attention_mask
             )
 
-            probs = torch.softmax(outputs.logits, dim=-1)[0]
+            logits = outputs.logits / TEMPERATURE
+            probs = F.softmax(logits, dim=-1)[0]
 
-        # IMPORTANT:
-        # class 0 = fake
-        # class 1 = real
-
-        prob_fake = float(probs[0].cpu().item())
-        prob_real = float(probs[1].cpu().item())
+        prob_fake = float(probs[0].item())
+        prob_real = float(probs[1].item())
 
         # ---------------------------------------------------------
-        # CLASSIFICATION LOGIC
+        # STABLE CONFIDENCE METRICS
         # ---------------------------------------------------------
-        if prob_fake >= 0.70:
-            classification = "Most likely fake"
+        margin = abs(prob_fake - prob_real)
 
-        elif prob_fake >= 0.40:
-            classification = "Uncertain"
+        confidence = margin
+        uncertainty = 1 - margin
 
+        risk_score = prob_fake
+
+        # ---------------------------------------------------------
+        # SOFT CLASSIFICATION (NO HARD THRESHOLDS)
+        # ---------------------------------------------------------
+        if uncertainty > 0.6:
+            label = "uncertain"
+            classification = "Low confidence prediction"
+        elif prob_fake > prob_real:
+            label = "fake"
+            classification = "Likely misinformation"
         else:
-            classification = "Most likely real"
+            label = "real"
+            classification = "Likely credible"
 
         # ---------------------------------------------------------
         # RESPONSE
         # ---------------------------------------------------------
         result = {
-            'status': 'success',
-            'article_id': article_id,
-            'analysis': {
-                'classification': classification,
-                'prob_real': round(prob_real, 4),
-                'prob_fake': round(prob_fake, 4),
-                'threshold_used': 0.70,
-                'crisis_detected': False,
-                'crisis_categories': [],
-                'crisis_keywords': {},
-                'crisis_intensity': round(prob_fake, 4)
+            "status": "success",
+            "article_id": article_id,
+
+            "analysis": {
+                "label": label,
+                "classification": classification,
+
+                "prob_fake": round(prob_fake, 4),
+                "prob_real": round(prob_real, 4),
+
+                "confidence": round(confidence, 4),
+                "uncertainty": round(uncertainty, 4),
+
+                "risk_score": round(risk_score, 4),
+
+                "decision_rule": "temperature-scaled softmax + margin-based uncertainty"
             }
         }
 
         return jsonify(result)
 
     except Exception as e:
-
         return jsonify({
-            'status': 'error',
-            'message': f'Analysis failed: {str(e)}'
+            "status": "error",
+            "message": f"Analysis failed: {str(e)}"
         }), 500
-
-
 # -------------------------------------------------------------------
 # RUN SERVER
 # -------------------------------------------------------------------
