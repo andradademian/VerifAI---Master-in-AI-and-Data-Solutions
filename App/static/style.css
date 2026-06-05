@@ -318,6 +318,39 @@ body {
     background: linear-gradient(90deg, #ef4444, #dc2626);
 }
 
+.demo-banner {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.analysis-section.ai-recommendation {
+    background: #f5f3ff;
+    border: 1px solid #ddd6fe;
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+}
+
+.analysis-section.ai-recommendation h3 {
+    color: #6d28d9;
+}
+
+.analysis-section.ai-recommendation p {
+    color: #312e81;
+}
+
+.analysis-section.ai-recommendation .ai-source {
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+    color: #8b8ba7;
+    font-style: italic;
+}
+
 
 #searchInput {
     padding: 0.75rem;

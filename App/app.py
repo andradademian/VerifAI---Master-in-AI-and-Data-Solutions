@@ -27,6 +27,21 @@ NEWSDATA_API_URL = os.getenv(
     'https://newsdata.io/api/1/latest'
 )
 
+# Cohere (AI-generated recommendations)
+COHERE_API_KEY = os.getenv('COHERE_API_KEY', '')
+COHERE_MODEL = os.getenv('COHERE_MODEL', 'command-a-03-2025')
+
+cohere_client = None
+if COHERE_API_KEY:
+    try:
+        import cohere
+        cohere_client = cohere.Client(COHERE_API_KEY)
+        print("Cohere client ready")
+    except ImportError:
+        print("Cohere not installed (pip install cohere) - AI recommendations disabled")
+else:
+    print("COHERE_API_KEY not set - AI recommendations disabled")
+
 # -------------------------------------------------------------------
 # LOAD AI MODEL
 # -------------------------------------------------------------------
@@ -38,15 +53,24 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 print("Loading AI model...")
 
-tokenizer = DistilBertTokenizerFast.from_pretrained(MODEL_DIR)
-
-model = DistilBertForSequenceClassification.from_pretrained(
-    MODEL_DIR
-).to(device)
-
-model.eval()
-
-print("AI model loaded successfully")
+# Model weights (*.safetensors / *.bin) are gitignored and may be missing on a
+# fresh checkout. Load defensively so the app still runs in DEMO mode, where
+# /api/analyze returns a placeholder confidence score and Cohere still produces
+# the friendly explanation.
+tokenizer = None
+model = None
+MODEL_AVAILABLE = False
+try:
+    tokenizer = DistilBertTokenizerFast.from_pretrained(MODEL_DIR)
+    model = DistilBertForSequenceClassification.from_pretrained(
+        MODEL_DIR
+    ).to(device)
+    model.eval()
+    MODEL_AVAILABLE = True
+    print("AI model loaded successfully")
+except Exception as e:
+    print(f"WARNING: could not load model weights ({e})")
+    print("Running in DEMO mode - /api/analyze will use a placeholder score")
 
 # -------------------------------------------------------------------
 # STORE ARTICLES
@@ -186,6 +210,45 @@ def get_article(article_id):
     }), 404
 
 # -------------------------------------------------------------------
+# COHERE AI RECOMMENDATION
+# -------------------------------------------------------------------
+def generate_ai_recommendation(title, label, prob_fake, prob_real):
+    """Generate a reader recommendation with Cohere's chat API.
+
+    Returns the recommendation text, or None if Cohere is unavailable
+    or the request fails (so analysis still works without it).
+    """
+    if cohere_client is None:
+        return None
+
+    ai_prompt = (
+        "You are a friendly media-literacy assistant. A fake-news detection model "
+        "analysed a news article and produced the confidence scores below.\n\n"
+        f"Headline: {title}\n"
+        f"Model verdict: {label}\n"
+        f"Confidence it is FAKE: {prob_fake:.0%}\n"
+        f"Confidence it is REAL: {prob_real:.0%}\n\n"
+        "Write a short, warm, plain-language message (2-3 sentences) to the reader. "
+        f"Explain in friendly terms WHY the model leans '{label}' based on these "
+        "confidence scores, and give one practical tip for checking the story "
+        "themselves. Avoid jargon and don't be alarmist."
+    )
+
+    try:
+        # Generated recommendation using Cohere's chat API with command-a-03-2025
+        ai_response = cohere_client.chat(
+            model=COHERE_MODEL,     # the specified model
+            message=ai_prompt,
+            max_tokens=200,
+            temperature=0.7,        # Optional: adjust creativity
+        )
+        return ai_response.text.strip()
+    except Exception as e:
+        print(f"Cohere request failed: {e}")
+        return None
+
+
+# -------------------------------------------------------------------
 # AI ANALYSIS ENDPOINT
 # -------------------------------------------------------------------
 @app.route('/api/analyze', methods=['POST'])
@@ -219,38 +282,49 @@ def analyze_article():
         content = f"Title: {title}. Article: {text[:2000]}"
         content = clean_text(content)
 
-        # ---------------------------------------------------------
-        # TOKENIZE
-        # ---------------------------------------------------------
-        inputs = tokenizer(
-            content,
-            max_length=MAX_LEN,
-            padding="max_length",
-            truncation=True,
-            return_tensors="pt"
-        )
-
-        input_ids = inputs["input_ids"].to(device)
-        attention_mask = inputs["attention_mask"].to(device)
-
-        # ---------------------------------------------------------
-        # MODEL INFERENCE (TEMPERATURE SCALING)
-        # ---------------------------------------------------------
-        import torch.nn.functional as F
-
-        TEMPERATURE = 2.0  # key fix for overconfidence
-
-        with torch.no_grad():
-            outputs = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask
+        if MODEL_AVAILABLE:
+            # -----------------------------------------------------
+            # TOKENIZE
+            # -----------------------------------------------------
+            inputs = tokenizer(
+                content,
+                max_length=MAX_LEN,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt"
             )
 
-            logits = outputs.logits / TEMPERATURE
-            probs = F.softmax(logits, dim=-1)[0]
+            input_ids = inputs["input_ids"].to(device)
+            attention_mask = inputs["attention_mask"].to(device)
 
-        prob_fake = float(probs[0].item())
-        prob_real = float(probs[1].item())
+            # -----------------------------------------------------
+            # MODEL INFERENCE (TEMPERATURE SCALING)
+            # -----------------------------------------------------
+            import torch.nn.functional as F
+
+            TEMPERATURE = 2.0  # key fix for overconfidence
+
+            with torch.no_grad():
+                outputs = model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask
+                )
+
+                logits = outputs.logits / TEMPERATURE
+                probs = F.softmax(logits, dim=-1)[0]
+
+            prob_fake = float(probs[0].item())
+            prob_real = float(probs[1].item())
+        else:
+            # -----------------------------------------------------
+            # DEMO MODE (model weights missing) - deterministic
+            # placeholder score derived from the article text so
+            # the UI + Cohere flow can still be exercised.
+            # -----------------------------------------------------
+            import hashlib
+            h = int(hashlib.sha256(content.encode("utf-8")).hexdigest(), 16)
+            prob_fake = 0.15 + (h % 1000) / 1000 * 0.70  # spread across 0.15-0.85
+            prob_real = 1.0 - prob_fake
 
         # ---------------------------------------------------------
         # STABLE CONFIDENCE METRICS
@@ -276,6 +350,13 @@ def analyze_article():
             classification = "Likely credible"
 
         # ---------------------------------------------------------
+        # AI RECOMMENDATION (Cohere)
+        # ---------------------------------------------------------
+        ai_recommendation = generate_ai_recommendation(
+            title, label, prob_fake, prob_real
+        )
+
+        # ---------------------------------------------------------
         # RESPONSE
         # ---------------------------------------------------------
         result = {
@@ -294,7 +375,10 @@ def analyze_article():
 
                 "risk_score": round(risk_score, 4),
 
-                "decision_rule": "temperature-scaled softmax + margin-based uncertainty"
+                "decision_rule": "temperature-scaled softmax + margin-based uncertainty",
+
+                "ai_recommendation": ai_recommendation,
+                "demo_mode": not MODEL_AVAILABLE
             }
         }
 

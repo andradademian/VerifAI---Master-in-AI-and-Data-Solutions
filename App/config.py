@@ -15,6 +15,10 @@ class Config:
     NEWSDATA_API_KEY = os.getenv('NEWSDATA_API_KEY')
     NEWS_API_BASE_URL = os.getenv('NEWS_API_BASE_URL', 'https://newsdata.io/api/1/latest')
 
+    # Cohere config (AI-generated recommendations)
+    COHERE_API_KEY = os.getenv('COHERE_API_KEY')
+    COHERE_MODEL = os.getenv('COHERE_MODEL', 'command-a-03-2025')
+
     # Validate required config
     if not NEWSDATA_API_KEY:
         raise ValueError("NEWSDATA_API_KEY must be set in environment variables")

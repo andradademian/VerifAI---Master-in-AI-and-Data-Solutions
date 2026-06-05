@@ -182,7 +182,7 @@ print(f"Predicted real     (< {UNCERTAIN_LOW:.2f}): {(results_df['pred_label']==
 # ---------------------------------------------------------------------------
 # 8b. Risk report
 # ---------------------------------------------------------------------------
-def generate_risk_report(results_df: pd.DataFrame) -> None:
+def generate_risk_report(results_df: pd.DataFrame) -> dict:
     scores = results_df["risk_score"]
     n = len(scores)
 
@@ -226,7 +226,103 @@ def generate_risk_report(results_df: pd.DataFrame) -> None:
 
     print(sep)
 
-generate_risk_report(results_df)
+    # Stats returned for downstream use (e.g. AI recommendations)
+    return {
+        "n": n,
+        "tier_counts": {label: int(mask.sum()) for label, mask in tiers},
+        "mean": float(scores.mean()),
+        "median": float(scores.median()),
+        "std": float(scores.std()),
+        "top_flagged": [
+            (str(r["title"])[:80] if r["title"] else "(no title)", float(r["risk_score"]))
+            for _, r in top.iterrows()
+        ],
+    }
+
+risk_stats = generate_risk_report(results_df)
+
+# ---------------------------------------------------------------------------
+# 8c. AI recommendations (Cohere chat API)
+# ---------------------------------------------------------------------------
+def generate_ai_recommendations(risk_stats: dict):
+    """Generate AI recommendations from the risk report using Cohere's chat API.
+
+    Returns (risk_assessment, reader_guidance). On any failure (no API key,
+    package missing, network error) returns (None, None) so the pipeline keeps
+    running without AI output.
+    """
+    api_key = Config.COHERE_API_KEY
+    if not api_key:
+        print("\n[AI] Skipped: COHERE_API_KEY not set")
+        return None, None
+
+    try:
+        import cohere
+    except ImportError:
+        print("\n[AI] Skipped: 'cohere' package not installed (pip install cohere)")
+        return None, None
+
+    tiers = risk_stats["tier_counts"]
+    top_lines = "\n".join(
+        f"  - [{score:.3f}] {title}" for title, score in risk_stats["top_flagged"]
+    )
+
+    stats_block = (
+        f"Articles analysed: {risk_stats['n']}\n"
+        f"Risk tiers -> Low: {tiers['Low']}, Medium: {tiers['Medium']}, "
+        f"High: {tiers['High']}, Critical: {tiers['Critical']}\n"
+        f"Risk score -> mean: {risk_stats['mean']:.3f}, "
+        f"median: {risk_stats['median']:.3f}, std: {risk_stats['std']:.3f}\n"
+        f"Top flagged headlines:\n{top_lines}"
+    )
+
+    risk_prompt = (
+        "You are a misinformation-risk analyst. Based on the fake-news detection "
+        "results below, write a short risk assessment (3-4 sentences) summarising "
+        "the overall reliability of this news batch.\n\n" + stats_block
+    )
+    reader_prompt = (
+        "You are a media-literacy advisor. Based on the fake-news detection results "
+        "below, give a reader 2-3 concrete, actionable tips for verifying the "
+        "flagged stories before trusting or sharing them.\n\n" + stats_block
+    )
+
+    try:
+        cohere_client = cohere.Client(api_key)
+
+        # Generated recommendations using Cohere's chat API with command-a-03-2025
+        risk_response = cohere_client.chat(
+            model=Config.COHERE_MODEL,   # the specified model
+            message=risk_prompt,
+            max_tokens=200,
+            temperature=0.7,             # Optional: adjust creativity
+        )
+        risk_assessment = risk_response.text.strip()
+
+        reader_response = cohere_client.chat(
+            model=Config.COHERE_MODEL,   # the specified model
+            message=reader_prompt,
+            max_tokens=200,
+            temperature=0.7,             # Optional: adjust creativity
+        )
+        reader_guidance = reader_response.text.strip()
+    except Exception as e:
+        print(f"\n[AI] Skipped: Cohere request failed ({e})")
+        return None, None
+
+    sep = "=" * 60
+    print(f"\n{sep}")
+    print("AI RECOMMENDATIONS (Cohere)")
+    print(sep)
+    print("\n- Risk Assessment -")
+    print(risk_assessment)
+    print("\n- Reader Guidance -")
+    print(reader_guidance)
+    print(sep)
+
+    return risk_assessment, reader_guidance
+
+ai_risk_assessment, ai_reader_guidance = generate_ai_recommendations(risk_stats)
 
 # ---------------------------------------------------------------------------
 # 9. Save

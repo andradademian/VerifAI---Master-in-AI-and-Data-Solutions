@@ -16,6 +16,11 @@ env/
 ENV/
 App/.venv/
 
+# Secrets / environment files
+.env
+*.env
+App/.env
+
 # Node
 node_modules/
 package-lock.json
