@@ -209,45 +209,51 @@ def get_article(article_id):
         'status': 'error',
         'message': 'Article not found'
     }), 404
-
 # -------------------------------------------------------------------
 # COHERE AI RECOMMENDATION
 # -------------------------------------------------------------------
-def generate_ai_recommendation(title, label, prob_fake, prob_real):
-    """Generate a reader recommendation with Cohere's chat API.
-
-    Returns the recommendation text, or None if Cohere is unavailable
-    or the request fails (so analysis still works without it).
-    """
+def generate_ai_recommendation(title, text, classification, uncertainty):
     if cohere_client is None:
         return None
 
-    ai_prompt = (
-        "You are a friendly media-literacy assistant. A fake-news detection model "
-        "analysed a news article and produced the confidence scores below.\n\n"
-        f"Headline: {title}\n"
-        f"Model verdict: {label}\n"
-        f"Confidence it is FAKE: {prob_fake:.0%}\n"
-        f"Confidence it is REAL: {prob_real:.0%}\n\n"
-        "Write a short, warm, plain-language message (2-3 sentences) to the reader. "
-        f"Explain in friendly terms WHY the model leans '{label}' based on these "
-        "confidence scores, and give one practical tip for checking the story "
-        "themselves. Avoid jargon and don't be alarmist."
-    )
+    # Guide Cohere to focus purely on the "why" and "how" without data repetition
+    ai_prompt = f"""
+You are an analyst for VerifAI, an platform evaluating news credibility.
+
+Your task is to write a short, friendly, and accessible summary explaining why our machine learning model reached its conclusion for the article below.
+
+ARTICLE DETAILS
+Title: {title}
+Text: {text[:2000]}
+
+MODEL TAKEAWAY
+Overall Status: {classification}
+Uncertainty Level: {"High" if uncertainty > 0.6 else "Normal"}
+
+INSTRUCTIONS
+Write a brief, easy-to-understand explanation (2-3 sentences max).
+
+Guidelines:
+- Use a helpful, conversational, yet professional tone (like a friendly editor).
+- STRICT RULE: Do not include ANY numbers, percentages, or mathematical metrics. The user already sees them on their dashboard.
+- Instead of metrics, describe the *linguistic style* of the text. Does it sound emotional, sensationalist, or speculative? Or does it use objective, well-structured language?
+- If the model's uncertainty is high, gently advise the reader to cross-reference with other sources.
+- Do not make definitive claims about whether the text is factually "true" or "false"—focus entirely on text style, tone, and framing.
+- Output ONLY the final summary text. No introductory filler.
+"""
 
     try:
-        # Generated recommendation using Cohere's chat API with command-a-03-2025
         ai_response = cohere_client.chat(
-            model=COHERE_MODEL,     # the specified model
+            model=COHERE_MODEL,
             message=ai_prompt,
-            max_tokens=200,
-            temperature=0.7,        # Optional: adjust creativity
+            max_tokens=150,
+            temperature=0.4
         )
         return ai_response.text.strip()
+
     except Exception as e:
         print(f"Cohere request failed: {e}")
         return None
-
 
 # -------------------------------------------------------------------
 # AI ANALYSIS ENDPOINT
@@ -354,7 +360,10 @@ def analyze_article():
         # AI RECOMMENDATION (Cohere)
         # ---------------------------------------------------------
         ai_recommendation = generate_ai_recommendation(
-            title, label, prob_fake, prob_real
+            title=title,
+            text=text,
+            classification=classification,
+            uncertainty=uncertainty
         )
 
         # ---------------------------------------------------------
