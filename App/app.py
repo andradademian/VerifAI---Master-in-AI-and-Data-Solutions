@@ -3,6 +3,7 @@ from flask_cors import CORS
 import requests
 import os
 from dotenv import load_dotenv
+import cohere
 
 # -------------------------------------------------------------------
 # AI MODEL IMPORTS
