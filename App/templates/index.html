@@ -3,54 +3,300 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VerifAI</title>
+    <title>VerifAI — Read the news with confidence</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}">
 
     <link rel="icon" href="../static/images/icon.ico">
-
 </head>
 <body>
-<div class="header">
-    <h1>VerifAI</h1>
-</div>
 
-<div class="container">
-    <div class="controls">
-        <button id="refreshBtn">Refresh Articles</button>
+<!-- ============================================================ -->
+<!-- TOP NAVIGATION                                                -->
+<!-- ============================================================ -->
+<nav class="topnav">
+    <div class="topnav-inner">
+        <div class="brand" data-tab="explore">
+            <span class="brand-mark">VerifAI</span>
+            <span class="brand-sub">Trust every headline</span>
+        </div>
 
-        <input
-                type="text"
-                id="searchInput"
-                placeholder="Search articles by keyword..."
-        >
+        <div class="nav-tabs">
+            <button class="nav-tab active" data-tab="explore">Explore</button>
+            <button class="nav-tab" data-tab="how">How it works</button>
+            <button class="nav-tab" data-tab="pricing">Pricing</button>
+            <button class="nav-tab" data-tab="subscribe">Subscribe</button>
+        </div>
 
-        <select id="categorySelect">
-            <option value="">All Categories</option>
-            <option value="business">Business</option>
-            <option value="entertainment">Entertainment</option>
-            <option value="health">Health</option>
-            <option value="politics">Politics</option>
-            <option value="science">Science</option>
-            <option value="sports">Sports</option>
-            <option value="technology">Technology</option>
-        </select>
+        <div class="nav-account">
+            <!-- Logged-out state -->
+            <div id="accountLoggedOut" class="account-state">
+                <button class="btn-ghost" id="navLoginBtn">Log in</button>
+                <button class="btn-solid" id="navSignupBtn">Sign up free</button>
+            </div>
+            <!-- Logged-in state -->
+            <div id="accountLoggedIn" class="account-state" style="display:none;">
+                <span class="usage-pill" id="usagePill" title="Free article checks used this month"></span>
+                <div class="account-chip" id="accountChip">
+                    <span class="avatar" id="accountAvatar">U</span>
+                    <span class="account-meta">
+                        <span class="account-email" id="accountEmail"></span>
+                        <span class="plan-badge" id="planBadge">Free</span>
+                    </span>
+                    <span class="chip-caret">▾</span>
+                    <div class="account-menu" id="accountMenu">
+                        <button data-tab="subscribe">My newsletter</button>
+                        <button data-tab="pricing">Upgrade plan</button>
+                        <button id="logoutBtn">Log out</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</nav>
 
-        <button id="searchBtn">Search</button>
-
-        <span id="articleCount"></span>
+<!-- ============================================================ -->
+<!-- TAB: EXPLORE  (the original, working MVP — unchanged logic)  -->
+<!-- ============================================================ -->
+<section class="tab-pane active" id="tab-explore">
+    <div class="header">
+        <h1>VerifAI</h1>
+        <p>Search the news, then score any article for credibility — instantly.</p>
     </div>
 
-    <div id="loading" class="loading">Loading articles...</div>
+    <div class="container">
+        <div class="controls">
+            <button id="refreshBtn">Refresh Articles</button>
 
-    <div id="articlesContainer" class="articles-grid">
-        <!-- Articles will be displayed here -->
+            <input
+                    type="text"
+                    id="searchInput"
+                    placeholder="Search articles by keyword..."
+            >
+
+            <select id="categorySelect">
+                <option value="">All Categories</option>
+                <option value="business">Business</option>
+                <option value="entertainment">Entertainment</option>
+                <option value="health">Health</option>
+                <option value="politics">Politics</option>
+                <option value="science">Science</option>
+                <option value="sports">Sports</option>
+                <option value="technology">Technology</option>
+            </select>
+
+            <button id="searchBtn">Search</button>
+
+            <span id="articleCount"></span>
+        </div>
+
+        <div id="loading" class="loading">Loading articles...</div>
+
+        <div id="articlesContainer" class="articles-grid">
+            <!-- Articles will be displayed here -->
+        </div>
+
+        <div id="noArticles" class="no-articles">No articles found.</div>
+    </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TAB: HOW IT WORKS                                             -->
+<!-- ============================================================ -->
+<section class="tab-pane" id="tab-how">
+    <div class="page-hero">
+        <h1>How VerifAI works</h1>
+        <p>Two ways to read with confidence — score articles on demand, or get a scored digest in your inbox.</p>
     </div>
 
-    <div id="noArticles" class="no-articles">No articles found.</div>
-</div>
+    <div class="page-wrap">
+        <div class="steps">
+            <div class="step">
+                <div class="step-num">1</div>
+                <h3>Pick your topics</h3>
+                <p>Choose the subjects and keywords you actually follow — politics, health, tech, or your own terms.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <h3>Add your email</h3>
+                <p>Subscribe free in seconds. No card, no spam — just the topics you asked for.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <h3>Get a scored digest</h3>
+                <p>Every week we send the best-sourced articles in your topics, each with a VerifAI trust score.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">4</div>
+                <h3>Score anything, anytime</h3>
+                <p>On the web app, paste or open any article and get an instant credibility read with a plain-English explanation.</p>
+            </div>
+        </div>
 
-<!-- Analysis Model -->
+        <div class="channels">
+            <h2>Two channels, one trust engine</h2>
+            <div class="channel-grid">
+                <div class="channel-card">
+                    <div class="channel-icon">🖥️</div>
+                    <h3>Web app</h3>
+                    <p>Search live news and score any article on demand. Great for checking a story before you share it.</p>
+                    <button class="btn-solid" data-tab="explore">Try the web app</button>
+                </div>
+                <div class="channel-card">
+                    <div class="channel-icon">✉️</div>
+                    <h3>Newsletter</h3>
+                    <p>Subscribe to your topics and receive a weekly digest of pre-scored articles, ready to read and rate.</p>
+                    <button class="btn-solid" data-tab="subscribe">Subscribe free</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="email-preview-block">
+            <h2>What lands in your inbox</h2>
+            <p class="muted">A sample VerifAI weekly digest. Each article arrives pre-scored — click to read the full breakdown.</p>
+            <div id="newsletterPreview" class="newsletter-preview"><!-- injected by ui.js --></div>
+        </div>
+
+        <div class="cta-band">
+            <h2>Ready to read with confidence?</h2>
+            <button class="btn-solid lg" data-tab="subscribe">Get my free digest</button>
+            <button class="btn-ghost lg" data-tab="pricing">See pricing</button>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TAB: PRICING                                                  -->
+<!-- ============================================================ -->
+<section class="tab-pane" id="tab-pricing">
+    <div class="page-hero">
+        <h1>Simple, honest pricing</h1>
+        <p>Start free. Upgrade only when you hit your limit — never on a countdown clock.</p>
+    </div>
+
+    <div class="page-wrap">
+        <div class="billing-toggle">
+            <span>Monthly</span>
+            <label class="switch">
+                <input type="checkbox" id="billingToggle">
+                <span class="slider"></span>
+            </label>
+            <span>Annual <span class="save-tag">save ~32%</span></span>
+        </div>
+
+        <div class="pricing-grid">
+            <!-- FREE -->
+            <div class="price-card">
+                <div class="price-tier">Free</div>
+                <div class="price-amount"><span class="price-num">$0</span><span class="price-per">/forever</span></div>
+                <p class="price-blurb">For the curious reader who wants to check the occasional story.</p>
+                <ul class="price-features">
+                    <li>Daily newsletter — <strong>3 scored articles</strong></li>
+                    <li>Overall trust score on every article</li>
+                    <li><strong>5 URL / article checks</strong> per month</li>
+                    <li>Standard topics</li>
+                </ul>
+                <button class="btn-solid block" data-action="start-free">Start free</button>
+            </div>
+
+            <!-- PREMIUM -->
+            <div class="price-card featured">
+                <div class="ribbon">Most popular</div>
+                <div class="price-tier">Premium</div>
+                <div class="price-amount">
+                    <span class="price-num" id="premiumPrice">$5.99</span><span class="price-per" id="premiumPer">/month</span>
+                </div>
+                <p class="price-note" id="premiumNote">Billed monthly · cancel anytime</p>
+                <p class="price-blurb">For the informed skeptic who reads — and shares — every day.</p>
+                <ul class="price-features">
+                    <li><strong>Unlimited</strong> URL / article checks</li>
+                    <li>Full <strong>five-dimension</strong> trust breakdown</li>
+                    <li>Custom topics &amp; keywords</li>
+                    <li>Weekly <strong>Trust Digest</strong></li>
+                    <li>Early access to new features</li>
+                </ul>
+                <button class="btn-solid block gold" data-action="upgrade">Go Premium</button>
+            </div>
+        </div>
+
+        <p class="pricing-foot muted">
+            Prices in USD. Benchmarked against Ground News ($4.99) and NewsGuard ($4.95).
+            Premium is usage-gated — you’ll only see an upgrade prompt when you hit the free limit, never on a timer.
+        </p>
+
+        <div class="roadmap-band">
+            <h3>On the roadmap</h3>
+            <div class="roadmap-chips">
+                <span class="chip">Browser extension</span>
+                <span class="chip">Mobile app (iOS &amp; Android)</span>
+                <span class="chip">Shareable trust cards</span>
+                <span class="chip">Score-flagging feedback loop</span>
+                <span class="chip">Multi-language scoring</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TAB: SUBSCRIBE                                                -->
+<!-- ============================================================ -->
+<section class="tab-pane" id="tab-subscribe">
+    <div class="page-hero">
+        <h1>Build your free digest</h1>
+        <p>Pick your topics, drop in your email, and we’ll send pre-scored articles every week.</p>
+    </div>
+
+    <div class="page-wrap narrow">
+        <form id="subscribeForm" class="subscribe-card">
+            <label class="field-label">1 · Choose your topics</label>
+            <div class="topic-grid" id="topicGrid">
+                <label class="topic"><input type="checkbox" value="Politics"><span>Politics</span></label>
+                <label class="topic"><input type="checkbox" value="Business"><span>Business</span></label>
+                <label class="topic"><input type="checkbox" value="Technology"><span>Technology</span></label>
+                <label class="topic"><input type="checkbox" value="Health"><span>Health</span></label>
+                <label class="topic"><input type="checkbox" value="Science"><span>Science</span></label>
+                <label class="topic"><input type="checkbox" value="World"><span>World</span></label>
+                <label class="topic"><input type="checkbox" value="Sports"><span>Sports</span></label>
+                <label class="topic"><input type="checkbox" value="Entertainment"><span>Entertainment</span></label>
+            </div>
+
+            <label class="field-label" for="keywordsInput">2 · Add keywords <span class="muted">(optional, comma-separated)</span></label>
+            <input type="text" id="keywordsInput" class="text-input" placeholder="e.g. elections, AI policy, climate">
+
+            <label class="field-label">3 · How often?</label>
+            <div class="freq-row">
+                <label class="radio"><input type="radio" name="freq" value="Daily"><span>Daily</span></label>
+                <label class="radio"><input type="radio" name="freq" value="Weekly" checked><span>Weekly</span></label>
+                <label class="radio"><input type="radio" name="freq" value="Biweekly"><span>Biweekly</span></label>
+            </div>
+
+            <label class="field-label" for="subscribeEmail">4 · Your email</label>
+            <input type="email" id="subscribeEmail" class="text-input" placeholder="you@example.com" required>
+
+            <button type="submit" class="btn-solid block lg">Subscribe free</button>
+            <p class="subscribe-foot muted">Free plan · 3 scored articles per digest · no card required. Upgrade anytime for the full five-dimension breakdown.</p>
+            <p id="subscribeError" class="form-error"></p>
+        </form>
+
+        <!-- Success state -->
+        <div id="subscribeSuccess" class="subscribe-success" style="display:none;">
+            <div class="success-check">✓</div>
+            <h2>You’re subscribed!</h2>
+            <p id="subscribeSummary" class="muted"></p>
+            <p class="muted">Here’s a preview of what your first digest will look like:</p>
+            <div id="successPreview" class="newsletter-preview"></div>
+            <div class="success-actions">
+                <button class="btn-solid" data-tab="explore">Score an article now</button>
+                <button class="btn-ghost" data-tab="pricing">See Premium</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- ANALYSIS MODAL  (original — premium section injected by JS)   -->
+<!-- ============================================================ -->
 <div id="analysisModal" class="analysis-modal">
     <div class="modal-content">
         <button class="modal-close">&times;</button>
@@ -65,16 +311,64 @@
                 <p><strong>Fake:</strong> <span id="probFake">--</span>%</p>
                 <p><strong>Classification:</strong> <span id="classification">--</span></p>
             </div>
-
-            <div class="analysis-section">
-                <h3>Crisis Detection</h3>
-                <p><strong>Crisis-Related:</strong> <span id="crisisDetected">--</span></p>
-                <p><strong>Categories:</strong> <span id="crisisCategories">--</span></p>
-            </div>
         </div>
     </div>
 </div>
 
+<!-- ============================================================ -->
+<!-- AUTH MODAL (mock login / signup)                              -->
+<!-- ============================================================ -->
+<div id="authModal" class="va-modal">
+    <div class="va-modal-card">
+        <button class="modal-close" data-close="auth">&times;</button>
+        <h2 id="authTitle">Welcome back</h2>
+        <p class="muted" id="authSubtitle">Log in to score articles and manage your digest.</p>
+        <form id="authForm">
+            <label class="field-label" for="authEmail">Email</label>
+            <input type="email" id="authEmail" class="text-input" placeholder="you@example.com" required>
+            <label class="field-label" for="authPassword">Password</label>
+            <input type="password" id="authPassword" class="text-input" placeholder="••••••••">
+            <button type="submit" class="btn-solid block lg" id="authSubmit">Log in</button>
+            <p class="form-error" id="authError"></p>
+        </form>
+        <p class="auth-switch muted">
+            <span id="authSwitchText">New to VerifAI?</span>
+            <button type="button" class="link-btn" id="authSwitchBtn">Sign up free</button>
+        </p>
+        <p class="demo-note">Demo mode — any email works, nothing is stored or sent.</p>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- UPGRADE MODAL (mock checkout)                                 -->
+<!-- ============================================================ -->
+<div id="upgradeModal" class="va-modal">
+    <div class="va-modal-card">
+        <button class="modal-close" data-close="upgrade">&times;</button>
+        <div class="upgrade-head">
+            <span class="upgrade-emoji">🚀</span>
+            <h2 id="upgradeTitle">Upgrade to Premium</h2>
+            <p class="muted" id="upgradeReason">Unlock unlimited checks and the full five-dimension trust breakdown.</p>
+        </div>
+        <div class="upgrade-price">
+            <span class="price-num">$5.99</span><span class="price-per">/month</span>
+            <span class="muted">· or $49/year</span>
+        </div>
+        <ul class="price-features">
+            <li><strong>Unlimited</strong> article checks</li>
+            <li>Full five-dimension breakdown</li>
+            <li>Custom topics &amp; weekly Trust Digest</li>
+        </ul>
+        <button class="btn-solid block lg gold" id="confirmUpgradeBtn">Upgrade now</button>
+        <button class="btn-ghost block" data-close="upgrade">Maybe later</button>
+        <p class="demo-note">Demo mode — no payment is taken. This simulates the checkout.</p>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script src="{{ url_for('static', filename='ui.js') }}"></script>
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

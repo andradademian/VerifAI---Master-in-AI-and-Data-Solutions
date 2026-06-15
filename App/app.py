@@ -3,16 +3,33 @@ from flask_cors import CORS
 import requests
 import os
 from dotenv import load_dotenv
-import cohere
+
+# Optional: Cohere powers the friendly AI explanation. Absent it, the app still
+# runs and scoring still works; the explanation section is simply skipped.
+try:
+    import cohere
+except ImportError:
+    cohere = None
 
 # -------------------------------------------------------------------
 # AI MODEL IMPORTS
 # -------------------------------------------------------------------
-import torch
-from transformers import (
-    DistilBertTokenizerFast,
-    DistilBertForSequenceClassification
-)
+# Imported defensively: torch + transformers are heavy and may be absent on a
+# lightweight demo machine. If they're missing the app still runs in DEMO mode
+# (placeholder score), so the UI/UX can be demoed without installing the model.
+try:
+    import torch
+    from transformers import (
+        DistilBertTokenizerFast,
+        DistilBertForSequenceClassification
+    )
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    DistilBertTokenizerFast = None
+    DistilBertForSequenceClassification = None
+    TORCH_AVAILABLE = False
+    print("WARNING: torch/transformers not installed - running in DEMO mode")
 
 load_dotenv()
 
@@ -50,7 +67,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL_DIR = os.path.join(BASE_DIR, "distilbert_frozen_hf")
 MAX_LEN = 256
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if TORCH_AVAILABLE else None
 
 print("Loading AI model...")
 
@@ -78,6 +95,43 @@ except Exception as e:
 # -------------------------------------------------------------------
 articles_cache = []
 
+# Bundled demo articles, used when no NEWSDATA_API_KEY is configured or the
+# live request fails — lets the Explore tab be demoed without any API key.
+try:
+    from sample_data import SAMPLE_ARTICLES
+except ImportError:
+    SAMPLE_ARTICLES = []
+
+
+def _filter_sample_articles(category='', query=''):
+    """Filter the bundled demo articles by category / keyword query."""
+    results = []
+    q = (query or '').lower()
+    for a in SAMPLE_ARTICLES:
+        if category and category not in a.get('category', []):
+            continue
+        if q:
+            haystack = (a.get('title', '') + ' ' + a.get('description', '') +
+                        ' ' + a.get('content', '')).lower()
+            if q not in haystack:
+                continue
+        results.append(a)
+    return results
+
+
+def _sample_response(category='', query=''):
+    """Build an /api/articles-shaped response from the bundled demo data."""
+    global articles_cache
+    articles = _filter_sample_articles(category, query)
+    articles_cache = articles
+    return jsonify({
+        'status': 'success',
+        'total_results': len(articles),
+        'articles': articles,
+        'nextPage': None,
+        'demo_articles': True
+    })
+
 
 @app.route('/')
 def index():
@@ -88,13 +142,18 @@ def index():
 @app.route('/api/articles', methods=['GET'])
 def get_articles():
 
-    try:
-        country = request.args.get('country', 'us')
-        language = request.args.get('language', 'en')
-        category = request.args.get('category', '')
-        query = request.args.get('q', '')
-        page = request.args.get('page', '')
+    country = request.args.get('country', 'us')
+    language = request.args.get('language', 'en')
+    category = request.args.get('category', '')
+    query = request.args.get('q', '')
+    page = request.args.get('page', '')
 
+    # No live news key configured -> serve bundled demo articles so the UI
+    # can still be demoed end-to-end.
+    if not NEWSDATA_API_KEY:
+        return _sample_response(category, query)
+
+    try:
         params = {
             'apikey': NEWSDATA_API_KEY,
             'country': country,
@@ -179,10 +238,10 @@ def get_articles():
             }), 500
 
     except requests.exceptions.RequestException as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'API request failed: {str(e)}'
-        }), 500
+        # Live news fetch failed (bad key, rate limit, no network) -> fall back
+        # to bundled demo articles so the demo keeps working.
+        print(f"Live news fetch failed ({e}); serving demo articles")
+        return _sample_response(category, query)
 
     except Exception as e:
         return jsonify({
@@ -405,18 +464,18 @@ def analyze_article():
 if __name__ == '__main__':
 
     if not NEWSDATA_API_KEY:
+        print("NOTE: NEWSDATA_API_KEY not set - Explore tab will serve bundled")
+        print("      demo articles. Set it in a .env file for live news.")
 
-        print("ERROR: NEWSDATA_API_KEY not found")
-        print("Please set it in your .env file")
+    # Port is configurable (macOS often occupies 5000 with AirPlay Receiver).
+    port = int(os.getenv('PORT', '5000'))
 
-    else:
+    print("Starting Flask server...")
+    print(f"Frontend: http://localhost:{port}")
+    print(f"Articles API: http://localhost:{port}/api/articles")
 
-        print("Starting Flask server...")
-        print("Frontend: http://localhost:5000")
-        print("Articles API: http://localhost:5000/api/articles")
-
-        app.run(
-            debug=True,
-            host='0.0.0.0',
-            port=5000
-        )
+    app.run(
+        debug=True,
+        host='0.0.0.0',
+        port=port
+    )
