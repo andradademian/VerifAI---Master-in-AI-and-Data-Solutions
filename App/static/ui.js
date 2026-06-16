@@ -221,8 +221,9 @@
             var rows = dimensionScores(analysis).map(function (d) {
                 return '<div class="dimension-row">' +
                     '<span class="dimension-label">' + d.name + '</span>' +
-                    '<span class="dimension-track"><span class="dimension-bar" style="width:' + d.value + '%"></span></span>' +
-                    '<span class="dimension-val">' + d.value + '</span>' +
+                    '<span class="dimension-track"><span class="dimension-bar ' + scoreClass(d.value) +
+                        '" data-w="' + d.value + '" style="width:0%"></span></span>' +
+                    '<span class="dimension-val">' + d.value + '%</span>' +
                     '</div>';
             }).join('');
             wrap.innerHTML = '<h3>Five-dimension trust breakdown <span class="premium-tag">PREMIUM</span></h3>' + rows;
@@ -236,6 +237,15 @@
                 '</div>';
         }
         content.appendChild(wrap);
+
+        // animate each bar from 0 to its percentage on next frame
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                qsa('.dimension-bar').forEach(function (b) {
+                    b.style.width = (b.getAttribute('data-w') || 0) + '%';
+                });
+            });
+        });
 
         var unlockBtn = $('unlockBreakdownBtn');
         if (unlockBtn) unlockBtn.addEventListener('click', function () {
