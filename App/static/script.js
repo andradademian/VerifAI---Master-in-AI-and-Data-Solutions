@@ -245,6 +245,12 @@ async function analyzeArticle(index) {
     const article = articles[index];
     const modal = document.getElementById('analysisModal');
 
+    // Freemium gating (demo layer): require sign-up + enforce the free
+    // monthly check limit. No-op if the UI layer (ui.js) is absent.
+    if (window.VerifAI && !window.VerifAI.gateAnalyze()) {
+        return;
+    }
+
     // Show modal with loading state
     showModal();
     document.getElementById('analysisContent').innerHTML = '<div class="loading">Analyzing article...</div>';
@@ -265,6 +271,11 @@ async function analyzeArticle(index) {
         const data = await response.json();
 
         if (data.status === 'success') {
+            // Count this successful check against the free quota (demo layer)
+            if (window.VerifAI) {
+                window.VerifAI.recordCheck();
+                data.analysis.article_id = data.article_id || article.id || '';
+            }
             displayAnalysis(data.analysis);
         } else {
             document.getElementById('analysisContent').innerHTML =
@@ -324,6 +335,11 @@ function displayAnalysis(analysis) {
         </div>
         ${aiSection}
     `;
+
+    // Inject the premium five-dimension breakdown (or its locked upsell)
+    if (window.VerifAI) {
+        window.VerifAI.augmentAnalysis(analysis);
+    }
 }
 
 function escapeHtml(text) {
